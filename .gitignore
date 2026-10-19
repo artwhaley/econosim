@@ -26,3 +26,6 @@ packages/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Freebuff local workspace metadata
+.freebuff/
