@@ -6,6 +6,52 @@ We are growing a standalone, C# economic simulation for a space logistics game. 
 
 That vision is context only. **Do not implement future systems unless an explicitly requested ticket requires them.**
 
+## Permanent architectural principles
+
+These two principles constrain every future ticket. They are not a backlog; they are rules for how new concepts may be added.
+
+### Principle A — Physical inventory
+
+**Every physically stored commodity exists in an inventory.**
+
+An inventory is a first-class domain object with:
+
+- Stable identity.
+- Owner.
+- Physical location.
+- Optional maximum capacity.
+- Commodity contents and quantities.
+
+Ownership and location are independent.
+
+An actor may own inventories at multiple stations without those inventories moving with the actor.
+
+An inventory may eventually represent a portable shipping container. Moving that container changes its physical location, not automatically its owner or contents.
+
+The location model must therefore not assume that every inventory is permanently located at a station.
+
+Moving an inventory and transferring commodities between inventories are distinct operations.
+
+Do not implement portable containers, ships, nested storage, or movement until separately requested.
+
+### Principle B — Inspectable simulation
+
+**Every new simulation concept must be inspectable through a narrowly scoped server query.**
+
+The server remains authoritative. Inspection must not require direct access to domain objects from a client.
+
+APIs must expose deliberate read models rather than directly serializing arbitrary domain objects or exposing mutable collections.
+
+Inspecting one inventory must not require constructing a snapshot of the entire economy.
+
+Do not continuously serialize or broadcast world state merely to support a development UI.
+
+Development/admin inspection and ordinary player access are distinct permissions. Never assume a development-only inspection endpoint is suitable for public player use.
+
+Initially, development inspection may be local-only without a full authentication system. It must not be exposed as an unrestricted public endpoint.
+
+These rules apply to future tickets as well.
+
 ## Execution discipline
 
 1. **Execute only the ticket explicitly requested in the current user prompt.** Having access to the next ticket is not authorization to do it. Stop after the ticket's acceptance criteria are checked.
