@@ -14,6 +14,7 @@
         </div>
         <div class="topbar-actions">
             <span class="env-badge">Local / Dev</span>
+            <button id="home-button" class="button ghost" type="button">All entities</button>
             <button id="refresh-button" class="button refresh" type="button">Refresh</button>
         </div>
     </header>
@@ -23,20 +24,34 @@
             <section class="nav-section">
                 <h2>Stations</h2>
                 <ul id="station-list" class="nav-list"></ul>
+                <p id="station-empty" class="empty-hint" hidden>No stations.</p>
+                <div id="station-pager" class="pager" hidden></div>
             </section>
+
             <section class="nav-section">
                 <h2>Actors</h2>
                 <ul id="actor-list" class="nav-list"></ul>
-                <p id="actor-empty" class="empty-hint">Discovered through inventory ownership.</p>
+                <p id="actor-empty" class="empty-hint" hidden>No actors.</p>
+                <div id="actor-pager" class="pager" hidden></div>
             </section>
+
             <section class="nav-section">
                 <h2>Commodities</h2>
                 <ul id="commodity-list" class="nav-list"></ul>
-                <p id="commodity-empty" class="empty-hint">Discovered through inventory contents.</p>
+                <p id="commodity-empty" class="empty-hint" hidden>No commodities.</p>
+                <div id="commodity-pager" class="pager" hidden></div>
             </section>
+
+            <section class="nav-section">
+                <h2>Inventories</h2>
+                <ul id="inventory-list" class="nav-list"></ul>
+                <p id="inventory-empty" class="empty-hint" hidden>No inventories.</p>
+                <div id="inventory-pager" class="pager" hidden></div>
+            </section>
+
             <p class="sidebar-note">
-                Read-only view of the in-memory development world. Every value is fetched from
-                the server's <span class="mono">/dev</span> API.
+                Read-only view of the in-memory development world. Every entity and relationship
+                is fetched from the server's <span class="mono">/dev</span> API.
             </p>
         </aside>
 
@@ -45,43 +60,19 @@
             <div id="error" class="state error" role="alert" hidden></div>
 
             <div id="content" hidden>
-                <section class="panel station-panel">
+                <section class="panel view-panel">
                     <div class="panel-heading">
                         <div>
-                            <p class="eyebrow">Station</p>
-                            <h2 id="station-name"></h2>
-                            <p class="id-line mono" id="station-id"></p>
+                            <p class="eyebrow" id="view-kind"></p>
+                            <h2 id="view-title"></h2>
+                            <p class="id-line mono" id="view-id"></p>
                         </div>
-                        <div class="metric">
-                            <span id="inventory-count">0</span>
-                            <small>inventories</small>
+                        <div class="metric" id="view-metric" hidden>
+                            <span id="view-metric-value">0</span>
+                            <small id="view-metric-label"></small>
                         </div>
                     </div>
-
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Inventory</th>
-                                <th>Owner</th>
-                                <th>Location</th>
-                                <th class="right">Contents</th>
-                            </tr>
-                        </thead>
-                        <tbody id="inventory-rows"></tbody>
-                    </table>
-                    <p id="inventory-empty" class="empty-state" hidden>No inventories are located here.</p>
-                </section>
-
-                <section id="detail-panel" class="panel detail-panel" hidden>
-                    <div class="panel-heading">
-                        <div>
-                            <p class="eyebrow" id="detail-kind">Inventory</p>
-                            <h2 id="detail-title"></h2>
-                            <p class="id-line mono" id="detail-id"></p>
-                        </div>
-                        <button id="detail-close" class="button ghost" type="button">Close</button>
-                    </div>
-                    <div id="detail-body"></div>
+                    <div id="view-body"></div>
                 </section>
             </div>
         </main>

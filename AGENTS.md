@@ -8,7 +8,7 @@ That vision is context only. **Do not implement future systems unless an explici
 
 ## Permanent architectural principles
 
-These two principles constrain every future ticket. They are not a backlog; they are rules for how new concepts may be added.
+These three principles constrain every future ticket. They are not a backlog; they are rules for how new concepts may be added.
 
 ### Principle A — Physical inventory
 
@@ -49,6 +49,37 @@ Do not continuously serialize or broadcast world state merely to support a devel
 Development/admin inspection and ordinary player access are distinct permissions. Never assume a development-only inspection endpoint is suitable for public player use.
 
 Initially, development inspection may be local-only without a full authentication system. It must not be exposed as an unrestricted public endpoint.
+
+### Principle C — Independent domain entities
+
+**Domain entities are independently addressable. Relationships do not imply containment or conceptual ownership.**
+
+Stations, actors, commodities, and inventories are first-class domain concepts.
+
+- A Station is a physical location.
+- An Actor is an economic participant.
+- A Commodity is a definition of a type of goods.
+- An Inventory is a storage object with its own identity, owner, physical location, and contents.
+
+The fact that an inventory belonging to Bob is located at Ceres does not make Bob a child of Ceres.
+
+The fact that Food exists in an inventory at Ceres does not make Food a child of Ceres.
+
+An actor owning an inventory at a station does not imply that the actor is physically present at that station.
+
+Each domain concept must be inspectable independently.
+
+Relationships provide contextual discovery and navigation, not exclusive pathways for finding entities.
+
+Collection queries must be targeted and bounded. Do not reconstruct the entire world or depend on unrelated location queries to discover globally addressable entities.
+
+Keep future economic queries conceptually distinct:
+
+- Inventories **located at** a station.
+- Inventories **owned by** an actor.
+- Inventories **containing** a commodity.
+
+These are different relationships and must not be conflated.
 
 These rules apply to future tickets as well.
 

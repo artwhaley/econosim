@@ -2,7 +2,7 @@ using SpaceEconomy.Domain;
 
 namespace SpaceEconomy.Server;
 
-public sealed record EntityReferenceDto(string Kind, string Id);
+public sealed record EntityReferenceDto(string Kind, string Id, string Name);
 
 public sealed record StationDto(string Id, string Name);
 
@@ -20,11 +20,16 @@ public sealed record InventoryDto(
     int? MaxItemCount,
     IReadOnlyList<InventoryLineDto> Contents);
 
-public sealed record InventoryPageDto(
-    int Skip,
-    int Take,
-    int Total,
-    IReadOnlyList<InventoryDto> Inventories);
+/// <summary>An inventory holding a positive quantity of one requested commodity.</summary>
+public sealed record CommodityStockDto(
+    string InventoryId,
+    string InventoryName,
+    EntityReferenceDto Owner,
+    EntityReferenceDto Location,
+    int Quantity);
+
+/// <summary>A bounded page of a collection. <see cref="Total"/> is the full match count.</summary>
+public sealed record PageDto<T>(int Skip, int Take, int Total, IReadOnlyList<T> Items);
 
 internal static class ReadModels
 {
@@ -34,8 +39,8 @@ internal static class ReadModels
 
     public static CommodityDto ToDto(this Commodity commodity) => new(commodity.Id, commodity.Name);
 
-    public static EntityReferenceDto ToDto(this EntityReference reference) =>
-        new(reference.Kind, reference.Id);
+    public static EntityReferenceDto ToDto(this EntityReference reference, EconomyState state) =>
+        new(reference.Kind, reference.Id, state.ResolveName(reference));
 
     public static InventoryDto ToDto(this Inventory inventory, EconomyState state)
     {
@@ -50,8 +55,8 @@ internal static class ReadModels
         return new InventoryDto(
             inventory.Id,
             inventory.Name,
-            inventory.Owner.ToDto(),
-            inventory.Location.ToDto(),
+            inventory.Owner.ToDto(state),
+            inventory.Location.ToDto(state),
             inventory.MaxItemCount,
             contents);
     }

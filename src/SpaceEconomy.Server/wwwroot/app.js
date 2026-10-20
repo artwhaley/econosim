@@ -1,29 +1,58 @@
+const DIRECTORY_PAGE_SIZE = 20;
+const RELATED_PAGE_SIZE = 20;
+
+const kinds = {
+    station: { plural: 'stations', label: 'Station' },
+    actor: { plural: 'actors', label: 'Actor' },
+    commodity: { plural: 'commodities', label: 'Commodity' },
+    inventory: { plural: 'inventories', label: 'Inventory' },
+};
+
+const pluralToKind = {};
+for (const [kind, meta] of Object.entries(kinds)) {
+    pluralToKind[meta.plural] = kind;
+}
+
 const elements = {
     loading: document.getElementById('loading'),
     error: document.getElementById('error'),
     content: document.getElementById('content'),
-    stationList: document.getElementById('station-list'),
-    actorList: document.getElementById('actor-list'),
-    actorEmpty: document.getElementById('actor-empty'),
-    commodityList: document.getElementById('commodity-list'),
-    commodityEmpty: document.getElementById('commodity-empty'),
-    stationName: document.getElementById('station-name'),
-    stationId: document.getElementById('station-id'),
-    inventoryCount: document.getElementById('inventory-count'),
-    inventoryRows: document.getElementById('inventory-rows'),
-    inventoryEmpty: document.getElementById('inventory-empty'),
-    detailPanel: document.getElementById('detail-panel'),
-    detailKind: document.getElementById('detail-kind'),
-    detailTitle: document.getElementById('detail-title'),
-    detailId: document.getElementById('detail-id'),
-    detailBody: document.getElementById('detail-body'),
-    detailClose: document.getElementById('detail-close'),
+    viewKind: document.getElementById('view-kind'),
+    viewTitle: document.getElementById('view-title'),
+    viewId: document.getElementById('view-id'),
+    viewMetric: document.getElementById('view-metric'),
+    viewMetricValue: document.getElementById('view-metric-value'),
+    viewMetricLabel: document.getElementById('view-metric-label'),
+    viewBody: document.getElementById('view-body'),
+    homeButton: document.getElementById('home-button'),
     refreshButton: document.getElementById('refresh-button'),
 };
 
+const directoryViews = {
+    stations: {
+        list: document.getElementById('station-list'),
+        empty: document.getElementById('station-empty'),
+        pager: document.getElementById('station-pager'),
+    },
+    actors: {
+        list: document.getElementById('actor-list'),
+        empty: document.getElementById('actor-empty'),
+        pager: document.getElementById('actor-pager'),
+    },
+    commodities: {
+        list: document.getElementById('commodity-list'),
+        empty: document.getElementById('commodity-empty'),
+        pager: document.getElementById('commodity-pager'),
+    },
+    inventories: {
+        list: document.getElementById('inventory-list'),
+        empty: document.getElementById('inventory-empty'),
+        pager: document.getElementById('inventory-pager'),
+    },
+};
+
 const state = {
-    stations: [],
-    stationId: null,
+    pages: {},
     selection: null,
 };
 
@@ -72,177 +101,346 @@ function summarize(contents) {
     return contents.map((line) => `${line.commodityName} × ${line.quantity}`).join(', ');
 }
 
-function refCell(reference) {
-    const cell = el('td', 'ref');
-    cell.append(el('span', 'ref-kind', `${reference.kind} / `), document.createTextNode(reference.id));
+function parseRoute() {
+    const raw = location.hash.replace(/^#\/?/, '');
+    const separator = raw.indexOf('/');
+    if (separator <= 0) {
+        return null;
+    }
+
+    const kind = pluralToKind[raw.slice(0, separator)];
+    const id = decodeURIComponent(raw.slice(separator + 1));
+    if (!kind || !id) {
+        return null;
+    }
+
+    return { kind, id };
+}
+
+function navigate(kind, id) {
+    if (!kinds[kind]) {
+        showError(new Error(`Unknown entity kind '${kind}'.`));
+        return;
+    }
+
+    const target = `#/${kinds[kind].plural}/${encodeURIComponent(id)}`;
+    if (location.hash === target) {
+        renderRoute();
+        return;
+    }
+
+    location.hash = target;
+}
+
+function linkButton(kind, id, label) {
+    const button = el('button', 'text-button', label);
+    button.type = 'button';
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        navigate(kind, id);
+    });
+    return button;
+}
+
+function entityCell(kind, entity) {
+    const cell = document.createElement('td');
+    const button = el('button', 'text-button entity-name', entity.name);
+    button.type = 'button';
+    button.title = `Inspect ${entity.name}`;
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        navigate(kind, entity.id);
+    });
+    cell.append(button, el('span', 'entity-id', entity.id));
     return cell;
 }
 
-function renderStationNav() {
-    elements.stationList.replaceChildren();
-
-    for (const station of state.stations) {
-        const item = document.createElement('li');
-        const button = el('button', 'nav-button');
-        button.type = 'button';
-        button.dataset.kind = 'station';
-        button.dataset.id = station.id;
-        button.append(el('span', '', station.name), el('span', 'nav-meta', station.id));
-        button.addEventListener('click', () => {
-            loadStation(station.id).catch(showError);
-        });
-        item.append(button);
-        elements.stationList.append(item);
+function refLink(reference) {
+    if (!kinds[reference.kind]) {
+        const text = el('span', 'ref-link');
+        text.append(
+            el('span', 'ref-name', reference.name || reference.id),
+            el('span', 'ref-id', `${reference.kind} / ${reference.id}`),
+        );
+        return text;
     }
-}
 
-function addDiscovery(list, kind, id, label) {
-    const item = document.createElement('li');
-    const button = el('button', 'nav-button');
+    const button = el('button', 'ref-link');
     button.type = 'button';
-    button.dataset.kind = kind;
-    button.dataset.id = id;
-    button.append(el('span', '', label), el('span', 'nav-meta', id));
-    button.addEventListener('click', () => {
-        inspectEntity(kind, id).catch(showError);
+    button.title = `Inspect ${reference.kind} ${reference.id}`;
+    button.append(
+        el('span', 'ref-name', reference.name || reference.id),
+        el('span', 'ref-id', `${reference.kind} / ${reference.id}`),
+    );
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        navigate(reference.kind, reference.id);
     });
-    item.append(button);
-    list.append(item);
+    return button;
 }
 
-async function renderDiscovered(inventories) {
-    const actors = new Set();
-    const commodities = new Map();
+function refCell(reference) {
+    const cell = el('td', 'ref');
+    cell.append(refLink(reference));
+    return cell;
+}
 
-    for (const inventory of inventories) {
-        if (inventory.owner.kind === 'actor') {
-            actors.add(inventory.owner.id);
+function buildTable(headers, rows, emptyText) {
+    if (rows.length === 0) {
+        return el('p', 'empty-state', emptyText);
+    }
+
+    const wrapper = el('div', 'table-scroll');
+    const table = el('table', 'data-table');
+
+    const head = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    for (const header of headers) {
+        headRow.append(el('th', header.align === 'right' ? 'right' : '', header.label));
+    }
+    head.append(headRow);
+
+    const body = document.createElement('tbody');
+    for (const row of rows) {
+        const tr = document.createElement('tr');
+        if (row.onClick) {
+            tr.className = 'entity-row';
+            tr.addEventListener('click', row.onClick);
         }
-        for (const line of inventory.contents) {
-            commodities.set(line.commodityId, line.commodityName);
-        }
+        tr.append(...row.cells);
+        body.append(tr);
     }
 
-    const actorEntries = await Promise.all(
-        [...actors].map(async (id) => {
-            try {
-                const actor = await getJson(`/dev/actors/${encodeURIComponent(id)}`);
-                return [id, actor.name];
-            } catch {
-                return [id, id];
-            }
-        }),
+    table.append(head, body);
+    wrapper.append(table);
+    return wrapper;
+}
+
+function renderPager(container, page, onPage) {
+    container.replaceChildren();
+
+    if (page.total <= page.take) {
+        container.hidden = true;
+        return;
+    }
+
+    container.hidden = false;
+
+    const previous = el('button', 'pager-button', '‹');
+    previous.type = 'button';
+    previous.setAttribute('aria-label', 'Previous page');
+    previous.disabled = page.skip === 0;
+    previous.addEventListener('click', () => onPage(Math.max(page.skip - page.take, 0)));
+
+    const next = el('button', 'pager-button', '›');
+    next.type = 'button';
+    next.setAttribute('aria-label', 'Next page');
+    next.disabled = page.skip + page.take >= page.total;
+    next.addEventListener('click', () => onPage(page.skip + page.take));
+
+    const first = Math.min(page.skip + 1, page.total);
+    const last = Math.min(page.skip + page.items.length, page.total);
+    container.append(
+        previous,
+        el('span', 'pager-label', `${first}–${last} of ${page.total}`),
+        next,
     );
-
-    actorEntries.sort((left, right) => left[1].localeCompare(right[1]));
-    elements.actorList.replaceChildren();
-    for (const [id, label] of actorEntries) {
-        addDiscovery(elements.actorList, 'actor', id, label);
-    }
-    elements.actorEmpty.hidden = actorEntries.length > 0;
-
-    const commodityEntries = [...commodities.entries()].sort((left, right) =>
-        left[1].localeCompare(right[1]),
-    );
-    elements.commodityList.replaceChildren();
-    for (const [id, label] of commodityEntries) {
-        addDiscovery(elements.commodityList, 'commodity', id, label);
-    }
-    elements.commodityEmpty.hidden = commodityEntries.length > 0;
 }
 
 function applySelectionStyles() {
     for (const button of document.querySelectorAll('.nav-button')) {
-        const { kind, id } = button.dataset;
-        const active = kind === 'station'
-            ? id === state.stationId
-            : state.selection !== null && state.selection.kind === kind && state.selection.id === id;
+        const active = state.selection !== null
+            && state.selection.kind === button.dataset.kind
+            && state.selection.id === button.dataset.id;
         button.classList.toggle('active', active);
     }
-
-    for (const row of elements.inventoryRows.querySelectorAll('.inventory-row')) {
-        row.classList.toggle(
-            'active',
-            state.selection !== null
-                && state.selection.kind === 'inventory'
-                && state.selection.id === row.dataset.inventoryId,
-        );
-    }
 }
 
-function renderStation(station, page) {
-    elements.stationName.textContent = station.name;
-    elements.stationId.textContent = `id ${station.id}`;
-    elements.inventoryCount.textContent = String(page.total);
-    elements.inventoryRows.replaceChildren();
+function renderDirectory(pluralName) {
+    const page = state.pages[pluralName] ?? { skip: 0, take: 0, total: 0, items: [] };
+    const targets = directoryViews[pluralName];
+    const kind = pluralToKind[pluralName];
 
-    for (const inventory of page.inventories) {
-        const row = document.createElement('tr');
-        row.className = 'inventory-row';
-        row.tabIndex = 0;
-        row.dataset.inventoryId = inventory.id;
-        row.setAttribute('role', 'button');
-        row.setAttribute('aria-label', `Inspect ${inventory.name}`);
-        row.addEventListener('click', () => {
-            inspectInventory(inventory.id).catch(showError);
-        });
-        row.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                inspectInventory(inventory.id).catch(showError);
-            }
-        });
-
-        const nameCell = document.createElement('td');
-        nameCell.append(
-            el('span', 'inventory-name', inventory.name),
-            el('span', 'inventory-id', inventory.id),
-        );
-
-        const contentsCell = el('td', 'right', summarize(inventory.contents));
-
-        row.append(nameCell, refCell(inventory.owner), refCell(inventory.location), contentsCell);
-        elements.inventoryRows.append(row);
+    targets.list.replaceChildren();
+    for (const entity of page.items) {
+        const item = document.createElement('li');
+        const button = el('button', 'nav-button');
+        button.type = 'button';
+        button.dataset.kind = kind;
+        button.dataset.id = entity.id;
+        button.append(el('span', '', entity.name), el('span', 'nav-meta', entity.id));
+        button.addEventListener('click', () => navigate(kind, entity.id));
+        item.append(button);
+        targets.list.append(item);
     }
 
-    elements.inventoryEmpty.hidden = page.inventories.length > 0;
+    targets.empty.hidden = page.items.length > 0;
+    renderPager(targets.pager, page, (skip) => {
+        loadDirectory(pluralName, skip).catch(showError);
+    });
+
+    applySelectionStyles();
 }
 
-function hideDetail() {
-    elements.detailPanel.hidden = true;
-    elements.detailBody.replaceChildren();
+async function loadDirectory(pluralName, skip = 0) {
+    const page = await getJson(`/dev/${pluralName}?skip=${skip}&take=${DIRECTORY_PAGE_SIZE}`);
+    state.pages[pluralName] = page;
+    renderDirectory(pluralName);
 }
 
-function showDetail(kind, title, id) {
-    elements.detailKind.textContent = kind;
-    elements.detailTitle.textContent = title;
-    elements.detailId.textContent = `id ${id}`;
-    elements.detailPanel.hidden = false;
+function showView(kindLabel, title, idLabel, metric) {
+    elements.viewKind.textContent = kindLabel;
+    elements.viewTitle.textContent = title;
+    elements.viewId.textContent = idLabel;
+
+    if (metric) {
+        elements.viewMetric.hidden = false;
+        elements.viewMetricValue.textContent = String(metric.value);
+        elements.viewMetricLabel.textContent = metric.label;
+    } else {
+        elements.viewMetric.hidden = true;
+    }
+
+    elements.viewBody.replaceChildren();
+    elements.content.hidden = false;
+    elements.loading.hidden = true;
 }
 
-function buildDetailBody(fields, contents) {
-    elements.detailBody.replaceChildren();
+function appendRelatedPager(page, onPage) {
+    const pager = el('div', 'pager');
+    renderPager(pager, page, onPage);
+    elements.viewBody.append(pager);
+}
+
+function renderStationView(station, page) {
+    showView('Station', station.name, `station / ${station.id}`, {
+        value: page.total,
+        label: 'inventories',
+    });
+
+    elements.viewBody.append(el('p', 'section-heading', 'Inventories located here'));
+
+    const rows = page.items.map((inventory) => ({
+        onClick: () => navigate('inventory', inventory.id),
+        cells: [
+            entityCell('inventory', inventory),
+            refCell(inventory.owner),
+            el('td', 'right', summarize(inventory.contents)),
+        ],
+    }));
+
+    elements.viewBody.append(buildTable(
+        [{ label: 'Inventory' }, { label: 'Owner' }, { label: 'Contents', align: 'right' }],
+        rows,
+        'No inventories are located here.',
+    ));
+
+    appendRelatedPager(page, (skip) => loadRelated({ kind: 'station', id: station.id }, skip, station));
+}
+
+function renderActorView(actor, page) {
+    showView('Actor', actor.name, `actor / ${actor.id}`, {
+        value: page.total,
+        label: 'inventories',
+    });
+
+    elements.viewBody.append(el('p', 'section-heading', `Inventories owned by ${actor.name}`));
+
+    const rows = page.items.map((inventory) => ({
+        onClick: () => navigate('inventory', inventory.id),
+        cells: [
+            entityCell('inventory', inventory),
+            refCell(inventory.location),
+            el('td', 'right', summarize(inventory.contents)),
+        ],
+    }));
+
+    elements.viewBody.append(buildTable(
+        [{ label: 'Inventory' }, { label: 'Location' }, { label: 'Contents', align: 'right' }],
+        rows,
+        'This actor owns no inventories.',
+    ));
+
+    elements.viewBody.append(el(
+        'p',
+        'view-note',
+        'Ownership does not imply physical presence. Actors have no location in this model yet.',
+    ));
+
+    appendRelatedPager(page, (skip) => loadRelated({ kind: 'actor', id: actor.id }, skip, actor));
+}
+
+function renderCommodityView(commodity, page) {
+    showView('Commodity', commodity.name, `commodity / ${commodity.id}`, {
+        value: page.total,
+        label: 'inventories',
+    });
+
+    elements.viewBody.append(el('p', 'section-heading', `Inventories containing ${commodity.name}`));
+
+    const rows = page.items.map((stock) => ({
+        onClick: () => navigate('inventory', stock.inventoryId),
+        cells: [
+            entityCell('inventory', { id: stock.inventoryId, name: stock.inventoryName }),
+            refCell(stock.owner),
+            refCell(stock.location),
+            el('td', 'right quantity', String(stock.quantity)),
+        ],
+    }));
+
+    elements.viewBody.append(buildTable(
+        [
+            { label: 'Inventory' },
+            { label: 'Owner' },
+            { label: 'Location' },
+            { label: 'Quantity', align: 'right' },
+        ],
+        rows,
+        `No inventory currently holds ${commodity.name}.`,
+    ));
+
+    appendRelatedPager(page, (skip) => loadRelated({ kind: 'commodity', id: commodity.id }, skip, commodity));
+}
+
+function renderInventoryView(inventory) {
+    showView('Inventory', inventory.name, `inventory / ${inventory.id}`, {
+        value: inventory.contents.length,
+        label: 'commodity lines',
+    });
 
     const grid = el('dl', 'detail-grid');
+    const fields = [
+        ['Owner', refLink(inventory.owner)],
+        ['Location', refLink(inventory.location)],
+        [
+            'Capacity',
+            inventory.maxItemCount === null ? 'Unlimited' : `${inventory.maxItemCount} item units`,
+        ],
+    ];
+
     for (const [label, value] of fields) {
         const field = el('div', 'detail-field');
-        field.append(el('dt', '', label), el('dd', '', value));
+        const description = document.createElement('dd');
+        if (typeof value === 'string') {
+            description.textContent = value;
+        } else {
+            description.append(value);
+        }
+        field.append(el('dt', '', label), description);
         grid.append(field);
     }
-    elements.detailBody.append(grid);
+    elements.viewBody.append(grid);
 
-    if (contents === null) {
+    elements.viewBody.append(el('p', 'contents-heading', 'Contents'));
+
+    if (inventory.contents.length === 0) {
+        elements.viewBody.append(el('p', 'empty-contents', 'Empty — no commodities stored.'));
         return;
     }
 
-    elements.detailBody.append(el('p', 'contents-heading', 'Contents'));
-
-    if (contents.length === 0) {
-        elements.detailBody.append(el('p', 'empty-contents', 'Empty — no commodities stored.'));
-        return;
-    }
-
+    const wrapper = el('div', 'table-scroll');
     const table = el('table', 'contents-table');
+
     const head = document.createElement('thead');
     const headRow = document.createElement('tr');
     headRow.append(
@@ -253,10 +451,12 @@ function buildDetailBody(fields, contents) {
     head.append(headRow);
 
     const body = document.createElement('tbody');
-    for (const line of contents) {
+    for (const line of inventory.contents) {
         const row = document.createElement('tr');
+        const commodityCell = document.createElement('td');
+        commodityCell.append(linkButton('commodity', line.commodityId, line.commodityName));
         row.append(
-            el('td', '', line.commodityName),
+            commodityCell,
             el('td', 'mono', line.commodityId),
             el('td', 'right quantity', String(line.quantity)),
         );
@@ -264,68 +464,99 @@ function buildDetailBody(fields, contents) {
     }
 
     table.append(head, body);
-    elements.detailBody.append(table);
+    wrapper.append(table);
+    elements.viewBody.append(wrapper);
 }
 
-async function inspectInventory(inventoryId) {
-    const inventory = await getJson(`/dev/inventories/${encodeURIComponent(inventoryId)}`);
-    state.selection = { kind: 'inventory', id: inventory.id };
+function renderHome() {
+    showView('Overview', 'Entity directories', 'Select any entity from the sidebar', null);
 
-    showDetail('Inventory', inventory.name, inventory.id);
-    buildDetailBody(
-        [
-            ['Owner', `${inventory.owner.kind} / ${inventory.owner.id}`],
-            ['Location', `${inventory.location.kind} / ${inventory.location.id}`],
-            [
-                'Capacity',
-                inventory.maxItemCount === null ? 'Unlimited' : `${inventory.maxItemCount} item units`,
-            ],
-        ],
-        inventory.contents,
-    );
+    const labels = {
+        stations: 'Stations',
+        actors: 'Actors',
+        commodities: 'Commodities',
+        inventories: 'Inventories',
+    };
 
-    applySelectionStyles();
-    elements.detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-async function inspectEntity(kind, id) {
-    const endpoint = kind === 'actor' ? 'actors' : 'commodities';
-    const entity = await getJson(`/dev/${endpoint}/${encodeURIComponent(id)}`);
-    state.selection = { kind, id: entity.id };
-
-    showDetail(kind === 'actor' ? 'Actor' : 'Commodity', entity.name, entity.id);
-    buildDetailBody(
-        [
-            ['Entity kind', kind],
-            ['Stable ID', entity.id],
-            ['Display name', entity.name],
-        ],
-        null,
-    );
-
-    applySelectionStyles();
-    elements.detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-async function loadStation(stationId, { keepSelection = false } = {}) {
-    if (!keepSelection) {
-        state.selection = { kind: 'station', id: stationId };
+    const grid = el('div', 'stat-grid');
+    for (const [pluralName, label] of Object.entries(labels)) {
+        const total = state.pages[pluralName]?.total ?? 0;
+        const card = el('div', 'stat-card');
+        card.append(el('span', 'stat-count', String(total)), el('span', 'stat-label', label));
+        grid.append(card);
     }
 
-    const [station, page] = await Promise.all([
-        getJson(`/dev/stations/${encodeURIComponent(stationId)}`),
-        getJson(`/dev/stations/${encodeURIComponent(stationId)}/inventories?take=100`),
-    ]);
+    elements.viewBody.append(grid);
+    elements.viewBody.append(el(
+        'p',
+        'home-note',
+        'Stations, actors, commodities, and inventories are independent entities. '
+            + 'Relationships such as ownership and location are navigation context, not containment.',
+    ));
+}
 
-    state.stationId = station.id;
-    renderStation(station, page);
-    await renderDiscovered(page.inventories);
-    applySelectionStyles();
+function renderUnavailable(route) {
+    showView(kinds[route.kind].label, 'Not available', `${route.kind} / ${route.id}`, null);
+    elements.viewBody.append(el(
+        'p',
+        'empty-state',
+        'The server did not return this entity. Use Refresh or choose another entity.',
+    ));
+}
 
-    if (!keepSelection) {
-        hideDetail();
+async function loadRelated(route, skip, entity) {
+    const encoded = encodeURIComponent(route.id);
+    try {
+        if (route.kind === 'station') {
+            const page = await getJson(
+                `/dev/stations/${encoded}/inventories?skip=${skip}&take=${RELATED_PAGE_SIZE}`,
+            );
+            renderStationView(entity, page);
+        } else if (route.kind === 'actor') {
+            const page = await getJson(
+                `/dev/actors/${encoded}/inventories?skip=${skip}&take=${RELATED_PAGE_SIZE}`,
+            );
+            renderActorView(entity, page);
+        } else {
+            const page = await getJson(
+                `/dev/commodities/${encoded}/inventories?skip=${skip}&take=${RELATED_PAGE_SIZE}`,
+            );
+            renderCommodityView(entity, page);
+        }
+    } catch (error) {
+        showError(error);
     }
+}
+
+async function loadEntity(route) {
+    const encoded = encodeURIComponent(route.id);
+
+    if (route.kind === 'inventory') {
+        renderInventoryView(await getJson(`/dev/inventories/${encoded}`));
+        return;
+    }
+
+    const entity = await getJson(`/dev/${kinds[route.kind].plural}/${encoded}`);
+    await loadRelated(route, 0, entity);
+}
+
+async function renderRoute() {
+    const route = parseRoute();
+    state.selection = route;
+    applySelectionStyles();
     showError(null);
+
+    if (route === null) {
+        renderHome();
+        return;
+    }
+
+    try {
+        await loadEntity(route);
+    } catch (error) {
+        showError(error);
+        renderUnavailable(route);
+    }
 }
 
 async function refresh() {
@@ -333,21 +564,10 @@ async function refresh() {
     elements.refreshButton.textContent = 'Refreshing…';
 
     try {
-        if (state.stationId === null) {
-            await initialize();
-            return;
-        }
-
-        const selection = state.selection;
-        await loadStation(state.stationId, { keepSelection: true });
-
-        if (selection !== null && selection.kind === 'inventory') {
-            await inspectInventory(selection.id);
-        } else if (selection !== null && selection.kind === 'actor') {
-            await inspectEntity('actor', selection.id);
-        } else if (selection !== null && selection.kind === 'commodity') {
-            await inspectEntity('commodity', selection.id);
-        }
+        await Promise.all(
+            Object.keys(directoryViews).map((pluralName) => loadDirectory(pluralName)),
+        );
+        await renderRoute();
     } catch (error) {
         showError(error);
     } finally {
@@ -362,14 +582,19 @@ async function initialize() {
     showError(null);
 
     try {
-        state.stations = await getJson('/dev/stations');
-        renderStationNav();
+        await Promise.all(
+            Object.keys(directoryViews).map((pluralName) => loadDirectory(pluralName)),
+        );
 
-        if (state.stations.length === 0) {
-            throw new Error('The development world contains no stations.');
+        if (!location.hash) {
+            const firstStation = state.pages.stations?.items[0];
+            const target = firstStation
+                ? `#/${kinds.station.plural}/${encodeURIComponent(firstStation.id)}`
+                : '#/';
+            history.replaceState(null, '', target);
         }
 
-        await loadStation(state.stations[0].id);
+        await renderRoute();
         elements.loading.hidden = true;
         elements.content.hidden = false;
     } catch (error) {
@@ -382,12 +607,16 @@ elements.refreshButton.addEventListener('click', () => {
     refresh().catch(showError);
 });
 
-elements.detailClose.addEventListener('click', () => {
-    state.selection = state.stationId === null
-        ? null
-        : { kind: 'station', id: state.stationId };
-    hideDetail();
-    applySelectionStyles();
+elements.homeButton.addEventListener('click', () => {
+    if (location.hash === '#/') {
+        renderRoute();
+        return;
+    }
+    location.hash = '#/';
+});
+
+window.addEventListener('hashchange', () => {
+    renderRoute();
 });
 
 initialize();
